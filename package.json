@@ -7,10 +7,14 @@
     "bin/",
     "src/",
     "LICENSE",
-    "README.md"
+    "README.md",
+    "DISCLOSURE"
   ],
+  "contentPolicy": {
+    "class": "dual-use"
+  },
   "bin": {
-    "websec-check": "./bin/websec-check.js"
+    "websec-check": "bin/websec-check.js"
   },
   "scripts": {
     "start": "node bin/websec-check.js",

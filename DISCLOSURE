@@ -1,0 +1,15 @@
+# Security Use Disclosure
+
+`websec-check` is a legitimate defensive cybersecurity utility designed for performing lightweight passive HTTP/web security configuration assessments.
+
+## Legitimate Defensive Use
+- **Passive Assessment Only**: It audits security headers, cookie attributes, CORS policies, redirection chains, and related HTTP response properties.
+- **No Exploits**: It does not contain or execute code designed to exploit vulnerabilities, execute payloads, or bypass security active controls.
+- **No Destructive Action**: It does not perform destructive scans, service stress tests, or denial of service actions.
+- **No Unauthorized Access**: It makes standard HTTP passive requests and does not attempt to brute force, bypass authentication, or gain unauthorized administrative access.
+- **Target Audience**: This utility is intended strictly for website owners, system administrators, software developers, security engineers, defenders, security researchers, and security auditors to verify hardening configurations.
+
+## Authorization & Legal Compliance
+- **Authorized Assessment Only**: Users must only scan systems and websites they personally own or have obtained express written authorization to assess.
+- **Interpretations of Findings**: Scan results represent configuration hardening recommendations based on defensive industry guidelines. The presence of a warning (e.g. missing security header) does not by itself prove exploitability or reveal system vulnerability.
+- **Intent**: This package is developed and distributed solely for lawful, defensive security audits and research purposes.
