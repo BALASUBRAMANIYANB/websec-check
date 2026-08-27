@@ -6,7 +6,25 @@
 export function validateUrl(value) {
     try {
         const url = new URL(value);
-        return url.protocol === "http:" || url.protocol === "https:";
+        if (url.protocol !== "http:" && url.protocol !== "https:") {
+            return false;
+        }
+
+        const hostname = url.hostname.toLowerCase();
+        const isPrivate =
+            hostname === "localhost" ||
+            hostname === "0.0.0.0" ||
+            hostname === "[::1]" ||
+            /^127\./.test(hostname) ||
+            /^10\./.test(hostname) ||
+            /^192\.168\./.test(hostname) ||
+            /^169\.254\./.test(hostname) ||
+            /^172\.(1[6-9]|2[0-9]|3[01])\./.test(hostname) ||
+            hostname.startsWith("fc00:") ||
+            hostname.startsWith("fd00:") ||
+            hostname.startsWith("fe80:");
+
+        return !isPrivate;
     } catch {
         return false;
     }
@@ -15,9 +33,9 @@ export function validateUrl(value) {
 /**
  * Custom parser for command line arguments.
  * Supports before/after options and URL extraction.
- * Options: --help, --version, --json, --verbose, --timeout <seconds>
+ * Options: --help, --version, --json, --verbose, --timeout <seconds>, --no-color, --max-redirects <number>
  * @param {string[]} args 
- * @returns {Object} { url, options: { help, version, json, verbose, timeout }, error }
+ * @returns {Object} { url, options: { help, version, json, verbose, timeout, noColor, maxRedirects }, error }
  */
 export function parseArgs(args) {
     const options = {
@@ -25,7 +43,9 @@ export function parseArgs(args) {
         version: false,
         json: false,
         verbose: false,
-        timeout: 10 // default 10 seconds
+        timeout: 10, // default 10 seconds
+        noColor: false,
+        maxRedirects: 5 // default 5 redirects
     };
     let url = null;
     let error = null;
@@ -41,6 +61,21 @@ export function parseArgs(args) {
             options.json = true;
         } else if (arg === "--verbose") {
             options.verbose = true;
+        } else if (arg === "--no-color") {
+            options.noColor = true;
+        } else if (arg === "--max-redirects") {
+            const nextArg = args[i + 1];
+            if (!nextArg || isNaN(nextArg)) {
+                error = `Invalid max-redirects value: ${nextArg || "missing"}. It must be a valid number.`;
+                break;
+            }
+            const num = parseInt(nextArg, 10);
+            if (num < 0) {
+                error = `Invalid max-redirects value: ${num}. It must be a non-negative integer.`;
+                break;
+            }
+            options.maxRedirects = num;
+            i++; // skip next arg
         } else if (arg === "--timeout") {
             const nextArg = args[i + 1];
             if (!nextArg || isNaN(nextArg)) {

@@ -1,29 +1,37 @@
 /**
  * Formatting and console logic separation.
- * Handles:
- *  1. Text output formatting (Pretty human-readable terminal charts)
- *  2. JSON formatting (Strict silent JSON logging)
- *  3. Verbose diagnostics reporting
+ * Handles colored terminal output, strict pure JSON, and verbose logs.
  */
 
+// ANSII terminal escape helper functions
+const colors = {
+    green: (str, noColor) => noColor ? str : `\x1b[32m${str}\x1b[0m`,
+    red: (str, noColor) => noColor ? str : `\x1b[31m${str}\x1b[0m`,
+    yellow: (str, noColor) => noColor ? str : `\x1b[33m${str}\x1b[0m`,
+    cyan: (str, noColor) => noColor ? str : `\x1b[36m${str}\x1b[0m`,
+    bold: (str, noColor) => noColor ? str : `\x1b[1m${str}\x1b[0m`,
+    dim: (str, noColor) => noColor ? str : `\x1b[2m${str}\x1b[0m`
+};
+
 /**
- * Returns standard status symbol based on finding properties.
+ * Returns formatted status symbol with colors options.
  * @param {string} status 
+ * @param {boolean} noColor 
  * @returns {string}
  */
-function getStatusSymbol(status) {
+function getStatusSymbol(status, noColor) {
     switch (status) {
         case "PASS":
-            return "✓";
-        case "WEAK":
-        case "INVALID":
-            return "✗";
+            return colors.green("✓", noColor);
+        case "WARN":
+            return colors.yellow("⚠", noColor);
+        case "FAIL":
+            return colors.red("✗", noColor);
         case "MISSING":
-            return "✗";
-        case "REVIEW":
+            return colors.red("✗", noColor);
         case "INFO":
         default:
-            return "!";
+            return colors.cyan("ℹ", noColor);
     }
 }
 
@@ -31,88 +39,87 @@ function getStatusSymbol(status) {
  * Formats findings for console logs.
  * @param {Object} scanResult 
  * @param {boolean} verbose 
+ * @param {boolean} noColor 
  */
-export function formatTerminal(scanResult, verbose = false) {
-    const findings = [...scanResult.headersResult.findings, ...scanResult.cookiesResult.findings, ...scanResult.corsResult.findings];
+export function formatTerminal(scanResult, verbose = false, noColor = false) {
+    const findings = scanResult.findings || [];
 
-    console.log("╔══════════════════════════════════════════════════╗");
-    console.log("║                  WEBSEC CHECK                    ║");
-    console.log("╚══════════════════════════════════════════════════╝");
+    console.log(colors.cyan("╔══════════════════════════════════════════════════╗", noColor));
+    console.log(colors.cyan("║                  WEBSEC CHECK                    ║", noColor));
+    console.log(colors.cyan("╚══════════════════════════════════════════════════╝", noColor));
     console.log("");
-    console.log(`Target:       ${scanResult.url}`);
-    console.log(`Final URL:    ${scanResult.finalUrl}`);
-    console.log(`HTTP Status:  ${scanResult.status}`);
+    console.log(`${colors.bold("Target:", noColor)}       ${scanResult.url}`);
+    console.log(`${colors.bold("Final URL:", noColor)}    ${scanResult.finalUrl}`);
+    console.log(`${colors.bold("HTTP Status:", noColor)}  ${scanResult.status}`);
 
     if (verbose) {
-        console.log(`Response Time: ${scanResult.responseTimeMs} ms`);
+        console.log(`${colors.bold("Response Time:", noColor)} ${scanResult.responseTimeMs} ms`);
         if (scanResult.server) {
-            console.log(`Server:       ${scanResult.server}`);
+            console.log(`${colors.bold("Server:", noColor)}       ${scanResult.server}`);
         }
         if (scanResult.redirectChain && scanResult.redirectChain.length > 0) {
-            console.log("Redirects Traced:");
-            for (const step of scanResult.redirectChain) {
-                console.log(`  → ${step}`);
-            }
+            console.log(colors.bold("Redirects Traced:", noColor));
+            scanResult.redirectChain.forEach((step, idx) => {
+                console.log(`  ${idx + 1}. → ${step.url} (${step.status})`);
+            });
         }
     }
     console.log("");
 
-    console.log("Security Headers");
-    console.log("────────────────────────────────────────────────────");
-    for (const f of scanResult.headersResult.findings) {
-        const symbol = getStatusSymbol(f.status);
-        console.log(`${symbol} ${f.name}`);
-    }
-    console.log("");
-
-    console.log("Cookies");
-    console.log("────────────────────────────────────────────────────");
-    if (scanResult.cookiesResult.cookiesChecked.length === 0) {
-        console.log("No cookies set by target response.");
-    } else {
-        const cookieFindings = findings.filter(f => f.category === "Cookies");
-        if (cookieFindings.length === 0) {
-            console.log("✓ All cookies configured securely (Secure, HttpOnly, and SameSite set).");
+    const printSection = (title, categoryName) => {
+        console.log(colors.bold(title, noColor));
+        console.log(colors.dim("────────────────────────────────────────────────────", noColor));
+        const sectionFindings = findings.filter(f => f.category.toLowerCase() === categoryName.toLowerCase());
+        if (sectionFindings.length === 0) {
+            console.log(`  ${colors.green("✓", noColor)} No issues detected.`);
         } else {
-            console.log(`Checked ${scanResult.cookiesResult.cookiesChecked.length} cookie(s).`);
-            for (const f of cookieFindings) {
-                const symbol = getStatusSymbol(f.status);
-                console.log(`${symbol} ${f.name} (${f.status}) - ${f.description}`);
-            }
+            sectionFindings.forEach(f => {
+                const symbol = getStatusSymbol(f.status, noColor);
+                console.log(`  ${symbol} ${f.name} (${f.status}) - ${f.description}`);
+            });
         }
-    }
-    console.log("");
+        console.log("");
+    };
 
-    console.log("CORS");
-    console.log("────────────────────────────────────────────────────");
-    const corsFindings = findings.filter(f => f.category === "CORS");
-    for (const f of corsFindings) {
-        const symbol = getStatusSymbol(f.status);
-        console.log(`${symbol} ${f.name || f.status} - ${f.description || f.issue}`);
-    }
-    console.log("");
+    // Print core sections
+    printSection("Security Headers", "Headers");
+    printSection("Cookies", "Cookies");
+    printSection("CORS", "CORS");
+    printSection("Redirects", "Redirects");
+    printSection("Information Disclosure", "Disclosure");
+    printSection("Cache Security", "Caching");
+    printSection("HTTP Methods", "Methods");
+    printSection("Security.txt Details", "Securitytxt");
 
-    console.log(`Security Score: ${scanResult.score}/100`);
-    console.log(`Risk Level:     ${scanResult.riskLevel}`);
+    // Print final score panel
+    let scoreColor = colors.red;
+    if (scanResult.score >= 80) {
+        scoreColor = colors.green;
+    } else if (scanResult.score >= 60) {
+        scoreColor = colors.yellow;
+    }
+
+    console.log(`${colors.bold("Security Score:", noColor)} ${scoreColor(scanResult.score + "/100", noColor)}`);
+    console.log(`${colors.bold("Risk Level:", noColor)}     ${scoreColor(scanResult.riskLevel, noColor)}`);
     console.log("");
 
     const recommendations = findings.filter(f => f.status !== "PASS" && f.recommendation);
     if (recommendations.length > 0) {
-        console.log("Recommendations");
-        console.log("────────────────────────────────────────────────────");
-        for (const f of recommendations) {
-            console.log(`• Configure ${f.name}:`);
+        console.log(colors.bold("Recommendations", noColor));
+        console.log(colors.dim("────────────────────────────────────────────────────", noColor));
+        recommendations.forEach(f => {
+            console.log(`• Configure ${colors.bold(f.name, noColor)}:`);
             console.log(`  Why:  ${f.description}`);
             console.log(`  Fix:  ${f.recommendation}`);
             if (verbose && f.evidence) {
                 console.log(`  Evidence:\n${f.evidence.split("\n").map(l => "    " + l).join("\n")}`);
             }
             console.log("");
-        }
+        });
     } else {
-        console.log("Recommendations");
-        console.log("────────────────────────────────────────────────────");
-        console.log("✓ No remediation actions required.");
+        console.log(colors.bold("Recommendations", noColor));
+        console.log(colors.dim("────────────────────────────────────────────────────", noColor));
+        console.log(`  ${colors.green("✓", noColor)} No remediation actions required.`);
         console.log("");
     }
 }
@@ -123,12 +130,6 @@ export function formatTerminal(scanResult, verbose = false) {
  * @param {string} version 
  */
 export function formatJson(scanResult, version) {
-    const allFindings = [
-        ...scanResult.headersResult.findings,
-        ...scanResult.cookiesResult.findings,
-        ...scanResult.corsResult.findings
-    ];
-
     const jsonReport = {
         tool: {
             name: "websec-check",
@@ -148,7 +149,7 @@ export function formatJson(scanResult, version) {
             max: 100,
             risk: scanResult.riskLevel
         },
-        findings: allFindings.map(f => ({
+        findings: scanResult.findings.map(f => ({
             id: f.id,
             category: f.category,
             name: f.name,

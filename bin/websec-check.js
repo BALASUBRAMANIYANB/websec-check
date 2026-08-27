@@ -22,17 +22,21 @@ Usage:
   websec-check <URL> [options]
 
 Options:
-  --help              Show help
-  --version           Show version
-  --json              Output machine-readable JSON
-  --verbose           Show additional response information
-  --timeout <seconds> Set request timeout
+  --help                 Show help
+  --version              Show version
+  --json                 Output machine-readable JSON
+  --verbose              Show additional response information
+  --timeout <seconds>    Set request timeout (default: 10)
+  --no-color             Disable colored console output
+  --max-redirects <num>  Set maximum redirect hops limit (default: 5)
 
 Examples:
   websec-check https://example.com
   websec-check https://example.com --json
   websec-check https://example.com --verbose
-  websec-check https://example.com --timeout 15`;
+  websec-check https://example.com --timeout 15
+  websec-check https://example.com --no-color
+  websec-check https://example.com --max-redirects 5`;
 
 // 1. Handle command line argument parsing errors
 if (error) {
@@ -66,11 +70,11 @@ if (!url) {
     process.exit(2); // CLI usage error
 }
 
-// 5. Validate URL protocol and structure
+// 5. Validate URL protocol, structure, and check SSRF rules
 if (!validateUrl(url)) {
     const errorMsg = `[ERROR] Invalid URL.
 
-Please provide a valid HTTP or HTTPS URL.
+Please provide a valid, public HTTP or HTTPS URL (local/private IPs are restricted).
 
 Example:
   websec-check https://example.com`;
@@ -81,12 +85,12 @@ Example:
 // 6. Execute vulnerability assessment scan
 async function run() {
     try {
-        const result = await scanWebsite(url, options.timeout, version);
+        const result = await scanWebsite(url, options.timeout, version, options.maxRedirects);
 
         if (options.json) {
             formatJson(result, version);
         } else {
-            formatTerminal(result, options.verbose);
+            formatTerminal(result, options.verbose, options.noColor);
         }
         process.exit(0);
     } catch (err) {

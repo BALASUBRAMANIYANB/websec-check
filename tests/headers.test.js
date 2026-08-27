@@ -56,6 +56,7 @@ test("scanner.js: Integration & dynamic mock server tests", async (t) => {
                 "Referrer-Policy": "strict-origin-when-cross-origin",
                 "Permissions-Policy": "microphone=()",
                 "Access-Control-Allow-Origin": "https://trusted.com",
+                "Cache-Control": "no-store",
                 "Set-Cookie": "session=secret; Secure; HttpOnly; SameSite=Strict"
             });
             res.end("ALL OK");
@@ -125,8 +126,7 @@ test("scanner.js: Integration & dynamic mock server tests", async (t) => {
             const result = await scanWebsite(`${baseUrl}/?case=redirect-1`, 5);
             assert.strictEqual(result.status, 200);
             assert.strictEqual(result.redirectChain.length, 1);
-            assert.ok(result.redirectChain[0].includes("case=redirect-1"));
-            assert.ok(result.redirectChain[0].includes("case=redirect-2"));
+            assert.ok(result.redirectChain[0].url.includes("case=redirect-2"));
         });
 
         await t.test("Verify timeout aborts request", async () => {

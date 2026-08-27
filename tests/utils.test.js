@@ -4,10 +4,14 @@ import { validateUrl, parseArgs } from "../src/utils.js";
 
 test("utils.js: URL Validation", () => {
     // Valid cases
-    assert.strictEqual(validateUrl("http://localhost"), true);
     assert.strictEqual(validateUrl("https://example.com/some/path?query=1"), true);
+    assert.strictEqual(validateUrl("http://example.com"), true);
 
-    // Invalid cases
+    // Invalid cases (including SSRF private ranges)
+    assert.strictEqual(validateUrl("http://localhost"), false);
+    assert.strictEqual(validateUrl("https://127.0.0.1"), false);
+    assert.strictEqual(validateUrl("http://192.168.1.100"), false);
+    assert.strictEqual(validateUrl("http://10.0.0.1"), false);
     assert.strictEqual(validateUrl("hello"), false);
     assert.strictEqual(validateUrl("example.com"), false);
     assert.strictEqual(validateUrl("ftp://example.com"), false);
@@ -23,14 +27,18 @@ test("utils.js: Option Parsing", () => {
     assert.strictEqual(res1.options.version, false);
     assert.strictEqual(res1.options.json, false);
     assert.strictEqual(res1.options.verbose, false);
+    assert.strictEqual(res1.options.noColor, false);
+    assert.strictEqual(res1.options.maxRedirects, 5);
     assert.strictEqual(res1.options.timeout, 10);
     assert.strictEqual(res1.error, null);
 
     // Options after URL
-    const res2 = parseArgs(["https://example.com", "--verbose", "--json"]);
+    const res2 = parseArgs(["https://example.com", "--verbose", "--json", "--no-color", "--max-redirects", "8"]);
     assert.strictEqual(res2.url, "https://example.com");
     assert.strictEqual(res2.options.verbose, true);
     assert.strictEqual(res2.options.json, true);
+    assert.strictEqual(res2.options.noColor, true);
+    assert.strictEqual(res2.options.maxRedirects, 8);
     assert.strictEqual(res2.error, null);
 
     // Options before URL
@@ -52,6 +60,10 @@ test("utils.js: Option Parsing", () => {
     // Negative timeout option
     const res6 = parseArgs(["https://example.com", "--timeout", "-5"]);
     assert.ok(res6.error !== null);
+
+    // Invalid max-redirects
+    const res8 = parseArgs(["https://example.com", "--max-redirects", "-2"]);
+    assert.ok(res8.error !== null);
 
     // Unknown option
     const res7 = parseArgs(["https://example.com", "--abc"]);

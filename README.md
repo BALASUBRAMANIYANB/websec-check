@@ -1,19 +1,22 @@
 # WebSec Check
 
-A lightweight command line interface (CLI) tool for performing passive HTTP/HTTPS security configuration checks on target websites. Written for Node.js 18+, it verifies the security properties of headers, cookie attributes, and CORS configurations.
+A lightweight, zero-dependency command line interface (CLI) tool for performing passive HTTP/HTTPS security configuration checks on target websites. Written for Node.js 18+, it verifies the security properties of headers, cookie attributes, CORS configurations, redirects, caches, and HTTP methods.
 
 ## Overview
 
-`websec-check` helps developers and security engineers audit their website headers and cookie settings against general industry guidelines.
+`websec-check` helps developers and security engineers audit their website configurations against general defensive industry guidelines. It strictly uses passive requests under standard HTTP protocols, ensuring no active exploitation or mutating sweeps are conducted.
 
 ## Features
 
-- **Security Headers Auditing**: Validates STS/HSTS, CSP directives, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, and Permissions-Policy.
+- **Security Headers Auditing**: Validates HSTS/STS, CSP directives, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, and Permissions-Policy.
 - **Cookie Security Checks**: Examines `Set-Cookie` headers for `Secure`, `HttpOnly`, `SameSite`, and other relevant attributes.
 - **CORS Configuration Scan**: Detects permissive policies (such as wildcard allow origin coupled with credential forwarding).
-- **Redirection Chain Tracing**: Traces HTTP-to-HTTPS redirects and reports security status.
-- **Custom Timeout Controls**: User-specified network connection timeouts.
-- **Machine-Readable output**: Support for standard JSON outputs for integration into security pipelines.
+- **Redirection Chain Tracing**: Traces redirect sequences, verifying HTTP-to-HTTPS upgrades, flagging HTTPS-to-HTTP downgrades, cross-origin changes, and excessive redirect hops.
+- **Information Disclosure Audit**: Flags technology footprints and server stack versions (e.g. `Server`, `X-Powered-By`, `X-AspNet-Version`).
+- **Cache Security Control**: Audits cache attributes preventing sensitive session memory leaks.
+- **HTTP Methods Exposure Check**: Assesses allowed server methods passively to warn on debug features like `TRACE`.
+- **Security Contact policy check**: Audits the presence of verification contacts under `.well-known/security.txt`.
+- **Custom controls**: Handles connection timeouts, custom max redirects limits, and disabled color modes.
 
 ## Installation
 
@@ -37,11 +40,13 @@ websec-check <URL> [options]
 
 ### Options
 
-- `--help`              Show usage and options
-- `--version`           Show tool version
-- `--json`              Output machine-readable JSON only
-- `--verbose`           Include HTTP handshake, redirect chains, server headers, and evidence details
-- `--timeout <seconds>` Set request connection timeout (defaults to 10 seconds)
+- `--help`                 Show usage and options
+- `--version`              Show tool version
+- `--json`                 Output machine-readable JSON only
+- `--verbose`              Include HTTP handshake, redirect chains, server headers, and evidence details
+- `--timeout <seconds>`    Set request connection timeout (default: 10 seconds)
+- `--no-color`             Disable colored terminal styling output
+- `--max-redirects <num>`  Set maximum redirection hops limit (default: 5 hops)
 
 ### Examples
 
@@ -55,80 +60,8 @@ websec-check https://example.com --verbose
 # JSON export
 websec-check https://example.com --json
 
-# Override timeout to 15 seconds
-websec-check https://example.com --timeout 15
-```
-
-## Example Output
-
-### Human-Readable (Console)
-
-```text
-╔══════════════════════════════════════════════════╗
-║                  WEBSEC CHECK                    ║
-╚══════════════════════════════════════════════════╝
-
-Target:       https://example.com
-Final URL:    https://example.com/
-HTTP Status:  200
-
-Security Headers
-────────────────────────────────────────────────────
-✓ Strict-Transport-Security
-✓ Content-Security-Policy
-✗ X-Content-Type-Options
-✓ X-Frame-Options
-✓ Referrer-Policy
-✗ Permissions-Policy
-
-Cookies
-────────────────────────────────────────────────────
-No cookies set by target response.
-
-CORS
-────────────────────────────────────────────────────
-✓ CORS: Not Enabled - No CORS headers are enabled.
-
-Security Score: 70/100
-Risk Level:     MEDIUM
-
-Recommendations
-────────────────────────────────────────────────────
-• Configure X-Content-Type-Options:
-  Why:  Allows MIME-sniffing, which can convert user uploads into executable assets (XSS).
-  Fix:  Set: X-Content-Type-Options: nosniff
-
-• Configure Permissions-Policy:
-  Why:  No Permissions-Policy defined to restrict feature access (microphone, camera, geolocation, etc.).
-  Fix:  Restrict features the application does not need using a hardware Permissions-Policy. Treat this as a hardening recommendation.
-```
-
-### JSON Output
-
-```json
-{
-  "tool": {
-    "name": "websec-check",
-    "version": "1.0.0"
-  },
-  "target": {
-    "originalUrl": "https://example.com",
-    "finalUrl": "https://example.com/"
-  },
-  "response": {
-    "status": 200,
-    "responseTimeMs": 142,
-    "server": "ECS (ewr/11A2)"
-  },
-  "score": {
-    "value": 70,
-    "max": 100,
-    "risk": "MEDIUM"
-  },
-  "findings": [
-     ...
-  ]
-}
+# Disable colors and override timeout/redirect limits
+websec-check https://example.com --no-color --timeout 15 --max-redirects 3
 ```
 
 ## Security Scoring
@@ -143,6 +76,18 @@ The audit calculates a configuration-hardening score from 0 to 100 based on stan
 | X-Frame-Options | 15 |
 | Referrer-Policy | 10 |
 | Permissions-Policy | 15 |
+
+### Deductions
+
+The following negative points can be deducted from the base score (each capped to prevent excessive penalties):
+- **Cookie settings**: up to -20 points
+- **CORS policies**: up to -10 points
+- **Redirect failures**: up to -15 points (e.g. unencrypted transmission, downgrades)
+- **Information disclosure**: up to -10 points (e.g. tech versions exposure)
+- **Cache-Control missing**: up to -5 points
+- **HTTP method exposures**: up to -5 points (e.g. TRACE enabled)
+
+*Note: security.txt absence does not affect coordinates score.*
 
 ### Risk Levels
 
@@ -174,17 +119,21 @@ websec-check/
 ├── bin/
 │   └── websec-check.js      # CLI Binary entry point
 ├── src/
+│   ├── cache.js             # Caching headers auditor
 │   ├── cookies.js           # Set-Cookie attribute scanner
 │   ├── cors.js              # CORS headers analyzer
+│   ├── disclosure.js        # Info leak & tech stack auditor
 │   ├── formatter.js         # Output formatter (terminal/JSON/error)
 │   ├── headers.js           # Security headers checker
+│   ├── methods.js           # Safe HTTP methods check
+│   ├── redirects.js         # Redirection sequence analyzer
 │   ├── scanner.js           # Scanner orchestrator (timing & redirect tracer)
 │   ├── scoring.js           # Score & Risk calculator
+│   ├── securitytxt.js       # security.txt endpoint presence check
 │   └── utils.js             # URL validator & options parser
 ```
 
 ## Development and Testing
-
 
 Support native unit testing using the Node.js runner:
 
@@ -192,7 +141,7 @@ Support native unit testing using the Node.js runner:
 # Run tests
 npm test
 
-# Run syntax lint checks
+# Run syntax check
 npm run lint
 ```
 
