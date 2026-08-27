@@ -1,0 +1,37 @@
+{
+  "name": "websec-check",
+  "version": "1.0.1",
+  "description": "A lightweight CLI tool for passive web security configuration checks.",
+  "type": "module",
+  "files": [
+    "bin/",
+    "src/",
+    "LICENSE",
+    "README.md"
+  ],
+  "bin": {
+    "websec-check": "./bin/websec-check.js"
+  },
+  "scripts": {
+    "start": "node bin/websec-check.js",
+    "test": "node --test",
+    "lint": "node --check bin/websec-check.js"
+  },
+  "keywords": [
+    "security",
+    "web-security",
+    "cybersecurity",
+    "vapt",
+    "security-headers",
+    "http",
+    "https",
+    "cli",
+    "penetration-testing",
+    "security-audit"
+  ],
+  "author": "Balasubramaniyan B",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  }
+}
