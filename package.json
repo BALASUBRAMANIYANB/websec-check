@@ -1,11 +1,12 @@
 {
   "name": "websec-check",
-  "version": "1.1.0",
-  "description": "A lightweight CLI tool for passive web security configuration checks.",
+  "version": "1.2.0",
+  "description": "Zero-dependency CLI & CI/CD tool for passive web security, TLS certificate, and HTTP hardening audits.",
   "type": "module",
   "files": [
     "bin/",
     "src/",
+    "action.yml",
     "LICENSE",
     "README.md",
     "DISCLOSURE"
@@ -21,15 +22,29 @@
     "test": "node --test",
     "lint": "node --check bin/websec-check.js"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BALASUBRAMANIYANB/websec-check.git"
+  },
+  "bugs": {
+    "url": "https://github.com/BALASUBRAMANIYANB/websec-check/issues"
+  },
+  "homepage": "https://github.com/BALASUBRAMANIYANB/websec-check#readme",
   "keywords": [
     "security",
     "web-security",
     "cybersecurity",
-    "vapt",
+    "devsecops",
+    "sarif",
+    "tls",
+    "ssl-certificate",
     "security-headers",
+    "vapt",
     "http",
     "https",
     "cli",
+    "github-action",
+    "owasp",
     "penetration-testing",
     "security-audit"
   ],

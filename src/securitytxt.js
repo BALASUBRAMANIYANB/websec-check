@@ -7,9 +7,10 @@
  * Checks security.txt presence.
  * @param {string} targetBaseUrl - base domain URL (e.g. https://example.com)
  * @param {number} timeoutSeconds - HTTP response timeout limit
+ * @param {Function} [fetchFn] - Mockable fetch function (defaults to globalThis.fetch)
  * @returns {Promise<Object>} { findings, deduction }
  */
-export async function analyzeSecurityTxt(targetBaseUrl, timeoutSeconds = 10) {
+export async function analyzeSecurityTxt(targetBaseUrl, timeoutSeconds = 10, fetchFn = globalThis.fetch) {
     const findings = [];
 
     if (!targetBaseUrl) {
@@ -21,7 +22,7 @@ export async function analyzeSecurityTxt(targetBaseUrl, timeoutSeconds = 10) {
     try {
         const parsed = new URL(targetBaseUrl);
         verifyUrl = `${parsed.protocol}//${parsed.host}/.well-known/security.txt`;
-    } catch (e) {
+    } catch {
         return { findings, deduction: 0 };
     }
 
@@ -29,11 +30,11 @@ export async function analyzeSecurityTxt(targetBaseUrl, timeoutSeconds = 10) {
     const timer = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
 
     try {
-        const response = await fetch(verifyUrl, {
+        const response = await fetchFn(verifyUrl, {
             method: "GET", // Use standard GET to verify readability
             signal: controller.signal,
             headers: {
-                "User-Agent": "websec-check/1.1.0"
+                "User-Agent": "websec-check/1.2.0"
             }
         });
 

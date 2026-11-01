@@ -26,10 +26,14 @@ test("utils.js: Option Parsing", () => {
     assert.strictEqual(res1.options.help, false);
     assert.strictEqual(res1.options.version, false);
     assert.strictEqual(res1.options.json, false);
+    assert.strictEqual(res1.options.format, "terminal");
     assert.strictEqual(res1.options.verbose, false);
     assert.strictEqual(res1.options.noColor, false);
     assert.strictEqual(res1.options.maxRedirects, 5);
     assert.strictEqual(res1.options.timeout, 10);
+    assert.strictEqual(res1.options.skipTls, false);
+    assert.strictEqual(res1.options.failBelow, null);
+    assert.strictEqual(res1.options.output, null);
     assert.strictEqual(res1.error, null);
 
     // Options after URL
@@ -37,6 +41,7 @@ test("utils.js: Option Parsing", () => {
     assert.strictEqual(res2.url, "https://example.com");
     assert.strictEqual(res2.options.verbose, true);
     assert.strictEqual(res2.options.json, true);
+    assert.strictEqual(res2.options.format, "json");
     assert.strictEqual(res2.options.noColor, true);
     assert.strictEqual(res2.options.maxRedirects, 8);
     assert.strictEqual(res2.error, null);
@@ -46,6 +51,28 @@ test("utils.js: Option Parsing", () => {
     assert.strictEqual(res3.url, "https://example.com");
     assert.strictEqual(res3.options.verbose, true);
     assert.strictEqual(res3.error, null);
+
+    // Format & output options
+    const resFormat = parseArgs(["https://example.com", "--format", "sarif", "-o", "report.sarif", "--fail-below", "85", "--skip-tls"]);
+    assert.strictEqual(resFormat.options.format, "sarif");
+    assert.strictEqual(resFormat.options.output, "report.sarif");
+    assert.strictEqual(resFormat.options.failBelow, 85);
+    assert.strictEqual(resFormat.options.skipTls, true);
+    assert.strictEqual(resFormat.error, null);
+
+    // Markdown format
+    const resMd = parseArgs(["https://example.com", "--format", "markdown"]);
+    assert.strictEqual(resMd.options.format, "markdown");
+    assert.strictEqual(resMd.error, null);
+
+    // Invalid format
+    const resBadFormat = parseArgs(["https://example.com", "--format", "xml"]);
+    assert.ok(resBadFormat.error !== null);
+    assert.ok(resBadFormat.error.includes("Invalid format"));
+
+    // Invalid fail-below
+    const resBadFail = parseArgs(["https://example.com", "--fail-below", "150"]);
+    assert.ok(resBadFail.error !== null);
 
     // Timeout option override
     const res4 = parseArgs(["https://example.com", "--timeout", "15"]);

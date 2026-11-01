@@ -1,36 +1,42 @@
-# WebSec Check
+# 🛡️ WebSec Check
 
-A lightweight, zero-dependency command line interface (CLI) tool for performing passive HTTP/HTTPS security configuration checks on target websites. Written for Node.js 18+, it verifies the security properties of headers, cookie attributes, CORS configurations, redirects, caches, and HTTP methods.
+[![Node.js Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)](https://nodejs.org/)
+[![Dependencies](https://img.shields.io/badge/dependencies-0%20(zero)-blue.svg)](package.json)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Output Formats](https://img.shields.io/badge/formats-Terminal%20%7C%20JSON%20%7C%20SARIF%20%7C%20Markdown-informational.svg)](#output-formats)
+[![CI](https://github.com/balasubramaniyan/websec-check/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
 
-## Overview
+A zero-dependency CLI tool and GitHub Action for passive web security, TLS certificate, and HTTP configuration audits. Designed for developers, AppSec, and DevSecOps pipelines to verify defensive configurations against OWASP guidelines.
 
-`websec-check` helps developers and security engineers audit their website configurations against general defensive industry guidelines. It strictly uses passive requests under standard HTTP protocols, ensuring no active exploitation or mutating sweeps are conducted.
+---
 
-## Features
+## Highlights
 
-- **Security Headers Auditing**: Validates HSTS/STS, CSP directives, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, and Permissions-Policy.
-- **Cookie Security Checks**: Examines `Set-Cookie` headers for `Secure`, `HttpOnly`, `SameSite`, and other relevant attributes.
-- **CORS Configuration Scan**: Detects permissive policies (such as wildcard allow origin coupled with credential forwarding).
-- **Redirection Chain Tracing**: Traces redirect sequences, verifying HTTP-to-HTTPS upgrades, flagging HTTPS-to-HTTP downgrades, cross-origin changes, and excessive redirect hops.
-- **Information Disclosure Audit**: Flags technology footprints and server stack versions (e.g. `Server`, `X-Powered-By`, `X-AspNet-Version`).
-- **Cache Security Control**: Audits cache attributes preventing sensitive session memory leaks.
-- **HTTP Methods Exposure Check**: Assesses allowed server methods passively to warn on debug features like `TRACE`.
-- **Security Contact policy check**: Audits the presence of verification contacts under `.well-known/security.txt`.
-- **Custom controls**: Handles connection timeouts, custom max redirects limits, and disabled color modes.
+- **⚡ Zero External Dependencies**: Powered entirely by native Node.js 18+ APIs (`node:tls`, `fetch`, `node:test`). Lightweight, secure, and fast.
+- **🔒 TLS & SSL Certificate Auditing**: Inspects certificate trust chains, expiration dates, remaining validity, and flags deprecated protocols (TLS 1.0/1.1).
+- **📋 OWASP Security Headers**: Evaluates HSTS, CSP (with `frame-ancestors` mitigation awareness), X-Frame-Options, X-Content-Type-Options, Referrer-Policy, and Permissions-Policy.
+- **🍪 Cookie & CORS Hardening**: Scans for `Secure`, `HttpOnly`, `SameSite`, and cookie prefixes (`__Host-`, `__Secure-`), and detects permissive CORS misconfigurations.
+- **🛡️ SSRF Guardrails**: Built-in validation prevents private, loopback, and local IP scanning (`127.0.0.1`, RFC 1918 ranges).
+- **📊 Multi-Format Reporting**: Outputs colored terminal views, machine-readable JSON, GitHub Flavored Markdown, and **OASIS SARIF v2.1.0** for GitHub Code Scanning.
+- **🚦 CI/CD Quality Gate**: Enforces minimum score thresholds (`--fail-below <score>`) to block insecure builds before deployment.
 
-## Installation
+---
 
-Install globally:
+## Quick Start
+
+Run instantly without installation using `npx`:
+
+```bash
+npx websec-check https://example.com
+```
+
+Or install globally:
 
 ```bash
 npm install -g websec-check
 ```
 
-Or run via `npx` directly without installation:
-
-```bash
-npx websec-check https://example.com
-```
+---
 
 ## Usage
 
@@ -38,113 +44,182 @@ npx websec-check https://example.com
 websec-check <URL> [options]
 ```
 
-### Options
+### CLI Options
 
-- `--help`                 Show usage and options
-- `--version`              Show tool version
-- `--json`                 Output machine-readable JSON only
-- `--verbose`              Include HTTP handshake, redirect chains, server headers, and evidence details
-- `--timeout <seconds>`    Set request connection timeout (default: 10 seconds)
-- `--no-color`             Disable colored terminal styling output
-- `--max-redirects <num>`  Set maximum redirection hops limit (default: 5 hops)
+| Option | Shorthand | Default | Description |
+| :--- | :---: | :---: | :--- |
+| `--help` | `-h` | - | Display help menu and usage examples |
+| `--version` | `-v` | - | Display installed version |
+| `--format <type>` | - | `terminal` | Report output format: `terminal`, `json`, `sarif`, `markdown` |
+| `--json` | - | - | Alias for `--format json` |
+| `--output <path>` | `-o` | - | Write output to specified file path (e.g. `report.sarif`, `summary.md`) |
+| `--fail-below <score>` | - | - | Exit with code `1` if the calculated score is below threshold (`0`–`100`) |
+| `--skip-tls` | - | `false` | Bypass TLS/SSL certificate handshake verification |
+| `--verbose` | - | `false` | Display HTTP handshake details, redirect chains, server headers, and evidence |
+| `--timeout <seconds>` | - | `10` | Request timeout limit in seconds |
+| `--no-color` | - | `false` | Disable ANSI terminal color codes |
+| `--max-redirects <num>` | - | `5` | Maximum number of redirect hops to trace |
 
 ### Examples
 
 ```bash
-# Basic scan
+# Basic terminal scan
 websec-check https://example.com
 
-# Verbose scan
+# Verbose scan with handshake and evidence details
 websec-check https://example.com --verbose
 
-# JSON export
-websec-check https://example.com --json
+# CI/CD Quality Gate: fail the pipeline if score is below 80
+websec-check https://example.com --fail-below 80
 
-# Disable colors and override timeout/redirect limits
-websec-check https://example.com --no-color --timeout 15 --max-redirects 3
+# Export SARIF for GitHub Code Scanning
+websec-check https://example.com --format sarif -o results.sarif
+
+# Export Markdown summary for PR comment or CI step summary
+websec-check https://example.com --format markdown -o report.md
 ```
 
-## Security Scoring
+---
 
-The audit calculates a configuration-hardening score from 0 to 100 based on standard weights:
+## CI/CD & GitHub Actions Integration
 
-| Check | Weight (Points) |
-| --- | --- |
-| Strict-Transport-Security | 20 |
-| Content-Security-Policy | 25 |
-| X-Content-Type-Options | 15 |
-| X-Frame-Options | 15 |
-| Referrer-Policy | 10 |
-| Permissions-Policy | 15 |
+### 1. Direct Step in GitHub Actions
+Add `websec-check` directly to your CI/CD deployment workflow:
 
-### Deductions
+```yaml
+name: Security Audit
 
-The following negative points can be deducted from the base score (each capped to prevent excessive penalties):
-- **Cookie settings**: up to -20 points
-- **CORS policies**: up to -10 points
-- **Redirect failures**: up to -15 points (e.g. unencrypted transmission, downgrades)
-- **Information disclosure**: up to -10 points (e.g. tech versions exposure)
-- **Cache-Control missing**: up to -5 points
-- **HTTP method exposures**: up to -5 points (e.g. TRACE enabled)
+on:
+  deployment_status:
+  push:
+    branches: [ main ]
 
-*Note: security.txt absence does not affect coordinates score.*
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-### Risk Levels
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
-- **LOW**: 80–100 points
-- **MEDIUM**: 60–79 points
-- **HIGH**: 0–59 points
+      - name: Audit Staging Environment
+        run: |
+          npx websec-check https://staging.example.com \
+            --format markdown \
+            -o report.md \
+            --fail-below 80
 
-*Note: The score is a configuration-hardening validator. It is not an absolute vulnerability score.*
+      - name: Publish Summary to Job
+        if: always()
+        run: cat report.md >> $GITHUB_STEP_SUMMARY
+```
 
-## Responsible Use
+### 2. GitHub Code Scanning (SARIF Integration)
+Ingest results directly into GitHub's **Security > Code scanning alerts** tab:
 
-> [!IMPORTANT]
-> Users should only scan systems they own or are authorized to assess.
+```yaml
+      - name: Run WebSec Check SARIF Export
+        run: |
+          npx websec-check https://staging.example.com --format sarif -o results.sarif
 
-This tool is designed for educational, defensive, and authorized configuration assessment purposes only. It must only be used on:
-- Websites you personally own or administer.
-- Environments where you have obtained express written authorization.
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+```
 
-Do not use this tool to perform mass passive scanning or target systems without consent.
+---
 
-## Limitations
+## Security Scoring Methodology
 
-WebSec Check is a lightweight passive HTTP security configuration assessment tool. Its score reflects the presence and quality of selected security controls and does not represent overall application security, vulnerability severity, or exploitability.
+The audit calculates a baseline hardening score from **0 to 100** based on standard weights:
+
+| Category | Security Control | Base Points |
+| :--- | :--- | :---: |
+| **Headers** | Content-Security-Policy (CSP) | 25 |
+| **Headers** | Strict-Transport-Security (HSTS) | 20 |
+| **Headers** | X-Frame-Options (or CSP `frame-ancestors`) | 15 |
+| **Headers** | X-Content-Type-Options | 15 |
+| **Headers** | Permissions-Policy | 15 |
+| **Headers** | Referrer-Policy | 10 |
+
+### Negative Deductions (Capped)
+
+Defensive misconfigurations deduct from the base score:
+
+| Category | Defect | Max Deduction |
+| :--- | :--- | :---: |
+| **TLS / SSL** | Expired certificate, untrusted CA, or deprecated protocol (TLS 1.0/1.1) | -15 |
+| **Cookies** | Missing `Secure`, `HttpOnly`, or `SameSite` on sensitive cookies | -20 |
+| **Redirects** | HTTPS-to-HTTP downgrade or excessive redirection hops | -15 |
+| **CORS** | Permissive wildcard origin paired with credential forwarding | -10 |
+| **Disclosure** | Explicit server version leakage (`Server`, `X-Powered-By`) | -10 |
+| **Cache** | Insecure caching policy on potentially sensitive responses | -5 |
+| **Methods** | Dangerous debugging methods exposed (`TRACE`) | -5 |
+
+### Risk Classification
+
+- 🟢 **LOW RISK**: 80–100 points (Strong defensive hardening)
+- 🟡 **MEDIUM RISK**: 60–79 points (Acceptable baseline, remediations recommended)
+- 🔴 **HIGH RISK**: 0–59 points (Critical security headers or TLS issues detected)
+
+---
 
 ## Project Structure
 
 ```text
 websec-check/
+├── .github/
+│   └── workflows/
+│       └── ci.yml             # Automated multi-OS Node.js matrix test workflow
+├── action.yml                 # Composite GitHub Action manifest
 ├── bin/
-│   └── websec-check.js      # CLI Binary entry point
+│   └── websec-check.js        # Executable CLI entrypoint
 ├── src/
-│   ├── cache.js             # Caching headers auditor
-│   ├── cookies.js           # Set-Cookie attribute scanner
-│   ├── cors.js              # CORS headers analyzer
-│   ├── disclosure.js        # Info leak & tech stack auditor
-│   ├── formatter.js         # Output formatter (terminal/JSON/error)
-│   ├── headers.js           # Security headers checker
-│   ├── methods.js           # Safe HTTP methods check
-│   ├── redirects.js         # Redirection sequence analyzer
-│   ├── scanner.js           # Scanner orchestrator (timing & redirect tracer)
-│   ├── scoring.js           # Score & Risk calculator
-│   ├── securitytxt.js       # security.txt endpoint presence check
-│   └── utils.js             # URL validator & options parser
+│   ├── cache.js               # Cache-Control sensitive data leakage checks
+│   ├── cookies.js             # Cookie attribute & prefix audits
+│   ├── cors.js                # CORS policy analyzer
+│   ├── disclosure.js          # Technology stack footprint checks
+│   ├── formatter.js           # Multi-format report engine (Terminal, JSON, SARIF, MD)
+│   ├── headers.js             # OWASP security headers auditor
+│   ├── methods.js             # HTTP methods analyzer
+│   ├── redirects.js           # Redirection sequence & downgrade tracer
+│   ├── scanner.js             # Orchestrator & async scanner pipeline
+│   ├── scoring.js             # Hardening scoring & deduction calculator
+│   ├── securitytxt.js         # RFC 9116 security.txt verification
+│   ├── tls.js                 # Zero-dependency TLS certificate & cipher auditor
+│   └── utils.js               # URL validator, SSRF protection, option parser
+└── tests/                     # Comprehensive native unit test suite (28 passing tests)
 ```
 
-## Development and Testing
+---
 
-Support native unit testing using the Node.js runner:
+## Development & Testing
+
+Run unit tests natively with Node's built-in test runner:
 
 ```bash
-# Run tests
+# Run unit test suite
 npm test
 
-# Run syntax check
+# Run syntax and lint check
 npm run lint
 ```
 
+---
+
+## Responsible Use
+
+> [!IMPORTANT]
+> **Defensive and Authorized Testing Only**  
+> `websec-check` performs purely passive HTTP/HTTPS requests. Never use this tool to scan targets without proper authorization or to conduct unauthorized reconnaissance.
+
+---
+
 ## License
 
-This project is licensed under the MIT License - see the `LICENSE` file for details.
+This project is open-source under the [MIT License](LICENSE).

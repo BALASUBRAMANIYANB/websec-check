@@ -1,5 +1,6 @@
 /**
  * Validates that the provided URL is a valid Http or Https URL.
+ * Restricts private, loopback, and local IP addresses to prevent SSRF abuse.
  * @param {string} value 
  * @returns {boolean}
  */
@@ -30,22 +31,28 @@ export function validateUrl(value) {
     }
 }
 
+const VALID_FORMATS = ["terminal", "json", "sarif", "markdown"];
+
 /**
  * Custom parser for command line arguments.
- * Supports before/after options and URL extraction.
- * Options: --help, --version, --json, --verbose, --timeout <seconds>, --no-color, --max-redirects <number>
+ * Supports flags: --help (-h), --version (-v), --json, --format, --output (-o),
+ *                 --fail-below, --verbose, --timeout, --no-color, --max-redirects, --skip-tls
  * @param {string[]} args 
- * @returns {Object} { url, options: { help, version, json, verbose, timeout, noColor, maxRedirects }, error }
+ * @returns {Object} { url, options, error }
  */
 export function parseArgs(args) {
     const options = {
         help: false,
         version: false,
         json: false,
+        format: "terminal",
+        output: null,
+        failBelow: null,
         verbose: false,
         timeout: 10, // default 10 seconds
         noColor: false,
-        maxRedirects: 5 // default 5 redirects
+        maxRedirects: 5, // default 5 redirects
+        skipTls: false
     };
     let url = null;
     let error = null;
@@ -53,16 +60,51 @@ export function parseArgs(args) {
     for (let i = 0; i < args.length; i++) {
         const arg = args[i];
 
-        if (arg === "--help") {
+        if (arg === "--help" || arg === "-h") {
             options.help = true;
-        } else if (arg === "--version") {
+        } else if (arg === "--version" || arg === "-v") {
             options.version = true;
         } else if (arg === "--json") {
             options.json = true;
+            options.format = "json";
+        } else if (arg === "--format") {
+            const nextArg = args[i + 1];
+            if (!nextArg || !VALID_FORMATS.includes(nextArg.toLowerCase())) {
+                error = `Invalid format: "${nextArg || ""}". Supported formats: ${VALID_FORMATS.join(", ")}`;
+                break;
+            }
+            options.format = nextArg.toLowerCase();
+            if (options.format === "json") {
+                options.json = true;
+            }
+            i++;
+        } else if (arg === "--output" || arg === "-o") {
+            const nextArg = args[i + 1];
+            if (!nextArg || nextArg.startsWith("-")) {
+                error = `Missing output file path for ${arg} option.`;
+                break;
+            }
+            options.output = nextArg;
+            i++;
+        } else if (arg === "--fail-below") {
+            const nextArg = args[i + 1];
+            if (!nextArg || isNaN(nextArg)) {
+                error = `Invalid fail-below value: "${nextArg || ""}". Must be a number between 0 and 100.`;
+                break;
+            }
+            const threshold = parseInt(nextArg, 10);
+            if (threshold < 0 || threshold > 100) {
+                error = `Invalid fail-below value: ${threshold}. Must be between 0 and 100.`;
+                break;
+            }
+            options.failBelow = threshold;
+            i++;
         } else if (arg === "--verbose") {
             options.verbose = true;
         } else if (arg === "--no-color") {
             options.noColor = true;
+        } else if (arg === "--skip-tls") {
+            options.skipTls = true;
         } else if (arg === "--max-redirects") {
             const nextArg = args[i + 1];
             if (!nextArg || isNaN(nextArg)) {
@@ -75,7 +117,7 @@ export function parseArgs(args) {
                 break;
             }
             options.maxRedirects = num;
-            i++; // skip next arg
+            i++;
         } else if (arg === "--timeout") {
             const nextArg = args[i + 1];
             if (!nextArg || isNaN(nextArg)) {
@@ -88,7 +130,7 @@ export function parseArgs(args) {
                 break;
             }
             options.timeout = seconds;
-            i++; // skip next arg
+            i++;
         } else if (arg.startsWith("-")) {
             error = `Unknown option: ${arg}`;
             break;

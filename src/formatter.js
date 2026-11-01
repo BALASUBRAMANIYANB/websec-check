@@ -1,9 +1,9 @@
 /**
  * Formatting and console logic separation.
- * Handles colored terminal output, strict pure JSON, and verbose logs.
+ * Handles colored terminal output, strict pure JSON, SARIF v2.1.0, and Markdown reports.
  */
 
-// ANSII terminal escape helper functions
+// ANSI terminal escape helper functions
 const colors = {
     green: (str, noColor) => noColor ? str : `\x1b[32m${str}\x1b[0m`,
     red: (str, noColor) => noColor ? str : `\x1b[31m${str}\x1b[0m`,
@@ -38,51 +38,54 @@ function getStatusSymbol(status, noColor) {
 /**
  * Formats findings for console logs.
  * @param {Object} scanResult 
- * @param {boolean} verbose 
- * @param {boolean} noColor 
+ * @param {boolean} [verbose=false] 
+ * @param {boolean} [noColor=false] 
+ * @returns {string}
  */
 export function formatTerminal(scanResult, verbose = false, noColor = false) {
     const findings = scanResult.findings || [];
+    const lines = [];
 
-    console.log(colors.cyan("╔══════════════════════════════════════════════════╗", noColor));
-    console.log(colors.cyan("║                  WEBSEC CHECK                    ║", noColor));
-    console.log(colors.cyan("╚══════════════════════════════════════════════════╝", noColor));
-    console.log("");
-    console.log(`${colors.bold("Target:", noColor)}       ${scanResult.url}`);
-    console.log(`${colors.bold("Final URL:", noColor)}    ${scanResult.finalUrl}`);
-    console.log(`${colors.bold("HTTP Status:", noColor)}  ${scanResult.status}`);
+    lines.push(colors.cyan("╔══════════════════════════════════════════════════╗", noColor));
+    lines.push(colors.cyan("║                  WEBSEC CHECK                    ║", noColor));
+    lines.push(colors.cyan("╚══════════════════════════════════════════════════╝", noColor));
+    lines.push("");
+    lines.push(`${colors.bold("Target:", noColor)}       ${scanResult.url}`);
+    lines.push(`${colors.bold("Final URL:", noColor)}    ${scanResult.finalUrl}`);
+    lines.push(`${colors.bold("HTTP Status:", noColor)}  ${scanResult.status}`);
 
     if (verbose) {
-        console.log(`${colors.bold("Response Time:", noColor)} ${scanResult.responseTimeMs} ms`);
+        lines.push(`${colors.bold("Response Time:", noColor)} ${scanResult.responseTimeMs} ms`);
         if (scanResult.server) {
-            console.log(`${colors.bold("Server:", noColor)}       ${scanResult.server}`);
+            lines.push(`${colors.bold("Server:", noColor)}       ${scanResult.server}`);
         }
         if (scanResult.redirectChain && scanResult.redirectChain.length > 0) {
-            console.log(colors.bold("Redirects Traced:", noColor));
+            lines.push(colors.bold("Redirects Traced:", noColor));
             scanResult.redirectChain.forEach((step, idx) => {
-                console.log(`  ${idx + 1}. → ${step.url} (${step.status})`);
+                lines.push(`  ${idx + 1}. → ${step.url} (${step.status})`);
             });
         }
     }
-    console.log("");
+    lines.push("");
 
     const printSection = (title, categoryName) => {
-        console.log(colors.bold(title, noColor));
-        console.log(colors.dim("────────────────────────────────────────────────────", noColor));
+        lines.push(colors.bold(title, noColor));
+        lines.push(colors.dim("────────────────────────────────────────────────────", noColor));
         const sectionFindings = findings.filter(f => f.category.toLowerCase() === categoryName.toLowerCase());
         if (sectionFindings.length === 0) {
-            console.log(`  ${colors.green("✓", noColor)} No issues detected.`);
+            lines.push(`  ${colors.green("✓", noColor)} No issues detected.`);
         } else {
             sectionFindings.forEach(f => {
                 const symbol = getStatusSymbol(f.status, noColor);
-                console.log(`  ${symbol} ${f.name} (${f.status}) - ${f.description}`);
+                lines.push(`  ${symbol} ${f.name} (${f.status}) - ${f.description}`);
             });
         }
-        console.log("");
+        lines.push("");
     };
 
     // Print core sections
     printSection("Security Headers", "Headers");
+    printSection("TLS & SSL Certificate", "TLS");
     printSection("Cookies", "Cookies");
     printSection("CORS", "CORS");
     printSection("Redirects", "Redirects");
@@ -99,37 +102,42 @@ export function formatTerminal(scanResult, verbose = false, noColor = false) {
         scoreColor = colors.yellow;
     }
 
-    console.log(`${colors.bold("Security Score:", noColor)} ${scoreColor(scanResult.score + "/100", noColor)}`);
-    console.log(`${colors.bold("Risk Level:", noColor)}     ${scoreColor(scanResult.riskLevel, noColor)}`);
-    console.log("");
+    lines.push(`${colors.bold("Security Score:", noColor)} ${scoreColor(scanResult.score + "/100", noColor)}`);
+    lines.push(`${colors.bold("Risk Level:", noColor)}     ${scoreColor(scanResult.riskLevel, noColor)}`);
+    lines.push("");
 
     const recommendations = findings.filter(f => f.status !== "PASS" && f.recommendation);
     if (recommendations.length > 0) {
-        console.log(colors.bold("Recommendations", noColor));
-        console.log(colors.dim("────────────────────────────────────────────────────", noColor));
+        lines.push(colors.bold("Recommendations", noColor));
+        lines.push(colors.dim("────────────────────────────────────────────────────", noColor));
         recommendations.forEach(f => {
-            console.log(`• Configure ${colors.bold(f.name, noColor)}:`);
-            console.log(`  Why:  ${f.description}`);
-            console.log(`  Fix:  ${f.recommendation}`);
+            lines.push(`• Configure ${colors.bold(f.name, noColor)}:`);
+            lines.push(`  Why:  ${f.description}`);
+            lines.push(`  Fix:  ${f.recommendation}`);
             if (verbose && f.evidence) {
-                console.log(`  Evidence:\n${f.evidence.split("\n").map(l => "    " + l).join("\n")}`);
+                lines.push(`  Evidence:\n${f.evidence.split("\n").map(l => "    " + l).join("\n")}`);
             }
-            console.log("");
+            lines.push("");
         });
     } else {
-        console.log(colors.bold("Recommendations", noColor));
-        console.log(colors.dim("────────────────────────────────────────────────────", noColor));
-        console.log(`  ${colors.green("✓", noColor)} No remediation actions required.`);
-        console.log("");
+        lines.push(colors.bold("Recommendations", noColor));
+        lines.push(colors.dim("────────────────────────────────────────────────────", noColor));
+        lines.push(`  ${colors.green("✓", noColor)} No remediation actions required.`);
+        lines.push("");
     }
+
+    const output = lines.join("\n");
+    console.log(output);
+    return output;
 }
 
 /**
- * Outputs valid JSON data only to stdout.
+ * Generates structured JSON report.
  * @param {Object} scanResult 
  * @param {string} version 
+ * @returns {string}
  */
-export function formatJson(scanResult, version) {
+export function formatJson(scanResult, version = "1.2.0") {
     const jsonReport = {
         tool: {
             name: "websec-check",
@@ -144,12 +152,13 @@ export function formatJson(scanResult, version) {
             responseTimeMs: scanResult.responseTimeMs,
             server: scanResult.server || null
         },
+        tls: scanResult.tlsResult?.certificate || null,
         score: {
             value: scanResult.score,
             max: 100,
             risk: scanResult.riskLevel
         },
-        findings: scanResult.findings.map(f => ({
+        findings: (scanResult.findings || []).map(f => ({
             id: f.id,
             category: f.category,
             name: f.name,
@@ -163,13 +172,173 @@ export function formatJson(scanResult, version) {
         }))
     };
 
-    console.log(JSON.stringify(jsonReport, null, 2));
+    const output = JSON.stringify(jsonReport, null, 2);
+    console.log(output);
+    return output;
+}
+
+/**
+ * Generates OASIS SARIF v2.1.0 output for GitHub Advanced Security & Code Scanning.
+ * @param {Object} scanResult 
+ * @param {string} version 
+ * @returns {string}
+ */
+export function formatSarif(scanResult, version = "1.2.0") {
+    const findings = scanResult.findings || [];
+    const issueFindings = findings.filter(f => f.status !== "PASS");
+
+    // Map severity to SARIF level
+    const mapSarifLevel = (severity, status) => {
+        if (status === "FAIL") return "error";
+        if (severity === "HIGH") return "error";
+        if (severity === "MEDIUM" || status === "WARN") return "warning";
+        return "note";
+    };
+
+    // Deduplicate rules
+    const rulesMap = new Map();
+    issueFindings.forEach(f => {
+        if (!rulesMap.has(f.id)) {
+            rulesMap.set(f.id, {
+                id: f.id,
+                name: f.name.replace(/[^a-zA-Z0-9]/g, ""),
+                shortDescription: {
+                    text: f.name
+                },
+                fullDescription: {
+                    text: f.description
+                },
+                defaultConfiguration: {
+                    level: mapSarifLevel(f.severity, f.status)
+                },
+                help: {
+                    text: f.recommendation || f.description
+                },
+                properties: {
+                    category: f.category,
+                    precision: "high",
+                    tags: ["security", "web-security", f.category.toLowerCase()]
+                }
+            });
+        }
+    });
+
+    const sarifReport = {
+        $schema: "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+        version: "2.1.0",
+        runs: [
+            {
+                tool: {
+                    driver: {
+                        name: "websec-check",
+                        version,
+                        informationUri: "https://github.com/balasubramaniyan/websec-check",
+                        rules: Array.from(rulesMap.values())
+                    }
+                },
+                results: issueFindings.map(f => ({
+                    ruleId: f.id,
+                    level: mapSarifLevel(f.severity, f.status),
+                    message: {
+                        text: `${f.description}${f.recommendation ? ` Remediation: ${f.recommendation}` : ""}`
+                    },
+                    locations: [
+                        {
+                            physicalLocation: {
+                                artifactLocation: {
+                                    uri: scanResult.finalUrl || scanResult.url
+                                }
+                            }
+                        }
+                    ],
+                    properties: {
+                        category: f.category,
+                        severity: f.severity,
+                        status: f.status
+                    }
+                }))
+            }
+        ]
+    };
+
+    const output = JSON.stringify(sarifReport, null, 2);
+    console.log(output);
+    return output;
+}
+
+/**
+ * Generates GitHub Flavored Markdown summary report for PRs & CI step summaries.
+ * @param {Object} scanResult 
+ * @param {string} version 
+ * @returns {string}
+ */
+export function formatMarkdown(scanResult, version = "1.2.0") {
+    const findings = scanResult.findings || [];
+    const lines = [];
+
+    const badgeIcon = scanResult.score >= 80 ? "🟢" : (scanResult.score >= 60 ? "🟡" : "🔴");
+
+    lines.push("# 🛡️ WebSec Check Security Audit Report");
+    lines.push("");
+    lines.push(`**Target:** \`${scanResult.url}\` | **Final URL:** \`${scanResult.finalUrl}\``);
+    lines.push(`**Score:** ${badgeIcon} **${scanResult.score}/100** (Risk Level: **${scanResult.riskLevel}**)`);
+    lines.push(`**Audit Time:** ${new Date().toISOString()} | **Duration:** ${scanResult.responseTimeMs} ms | **Version:** \`v${version}\``);
+    lines.push("");
+
+    if (scanResult.tlsResult?.certificate) {
+        const cert = scanResult.tlsResult.certificate;
+        lines.push("### 🔒 TLS / SSL Certificate");
+        lines.push(`- **Subject:** \`${cert.subject}\``);
+        lines.push(`- **Issuer:** \`${cert.issuer}\``);
+        lines.push(`- **Protocol:** \`${cert.protocol}\` (${cert.cipher})`);
+        lines.push(`- **Valid Until:** \`${cert.validTo}\``);
+        lines.push("");
+    }
+
+    lines.push("### 📋 Audit Summary");
+    lines.push("");
+    lines.push("| Status | Category | Check | Severity | Details |");
+    lines.push("| :---: | :--- | :--- | :---: | :--- |");
+
+    findings.forEach(f => {
+        let statusIcon = "ℹ️";
+        if (f.status === "PASS") statusIcon = "✅";
+        else if (f.status === "WARN") statusIcon = "⚠️";
+        else if (f.status === "FAIL" || f.status === "MISSING") statusIcon = "❌";
+
+        lines.push(`| ${statusIcon} | **${f.category}** | ${f.name} | \`${f.severity}\` | ${f.description} |`);
+    });
+    lines.push("");
+
+    const actionItems = findings.filter(f => f.status !== "PASS" && f.recommendation);
+    if (actionItems.length > 0) {
+        lines.push("### 🛠️ Remediation Steps");
+        lines.push("");
+        actionItems.forEach(f => {
+            lines.push(`- **${f.name}** (\`${f.category}\`):`);
+            lines.push(`  - *Issue:* ${f.description}`);
+            lines.push(`  - *Remediation:* ${f.recommendation}`);
+        });
+        lines.push("");
+    } else {
+        lines.push("### 🛠️ Remediation Steps");
+        lines.push("");
+        lines.push("✅ No remediation required. All evaluated controls satisfy defensive baselines.");
+        lines.push("");
+    }
+
+    lines.push("---");
+    lines.push("*Generated by [websec-check](https://github.com/balasubramaniyan/websec-check)*");
+
+    const output = lines.join("\n");
+    console.log(output);
+    return output;
 }
 
 /**
  * Report error either as plain text or structured JSON.
  * @param {string} message 
- * @param {boolean} jsonMode 
+ * @param {boolean} [jsonMode=false] 
  */
 export function formatError(message, jsonMode = false) {
     if (jsonMode) {

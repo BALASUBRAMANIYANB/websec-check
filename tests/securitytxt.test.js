@@ -1,37 +1,27 @@
 import test from "node:test";
 import assert from "node:assert";
-import http from "node:http";
 import { analyzeSecurityTxt } from "../src/securitytxt.js";
 
 test("securitytxt.js: Passive retrieval integration", async (t) => {
-    // Start local server that responds dynamically
-    const server = http.createServer((req, res) => {
-        if (req.url === "/.well-known/security.txt") {
-            res.writeHead(200, { "Content-Type": "text/plain" });
-            res.end("Contact: security@example.com");
-        } else {
-            res.writeHead(404);
-            res.end("NOT FOUND");
+    const mockFetch = async (url) => {
+        if (url.includes("/.well-known/security.txt") && !url.includes("missing")) {
+            return new Response("Contact: security@example.com\nExpires: 2027-01-01T00:00:00.000Z", {
+                status: 200,
+                headers: { "Content-Type": "text/plain" }
+            });
         }
+        return new Response("NOT FOUND", { status: 404 });
+    };
+
+    await t.test("Verify successful security.txt find", async () => {
+        const res = await analyzeSecurityTxt("https://example.com", 2, mockFetch);
+        assert.strictEqual(res.deduction, 0);
+        assert.ok(res.findings.some(f => f.id === "securitytxt-ok"));
     });
 
-    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-    const port = server.address().port;
-    const baseUrl = `http://127.0.0.1:${port}`;
-
-    try {
-        await t.test("Verify successful security.txt find", async () => {
-            const res = await analyzeSecurityTxt(baseUrl, 2);
-            assert.strictEqual(res.deduction, 0);
-            assert.ok(res.findings.some(f => f.id === "securitytxt-ok"));
-        });
-
-        await t.test("Verify missing security.txt fallback", async () => {
-            const res = await analyzeSecurityTxt("http://127.0.0.1:9999", 1); // invalid port
-            assert.strictEqual(res.deduction, 0);
-            assert.ok(res.findings.some(f => f.id === "securitytxt-missing"));
-        });
-    } finally {
-        server.close();
-    }
+    await t.test("Verify missing security.txt fallback", async () => {
+        const res = await analyzeSecurityTxt("https://missing.example.com", 1, mockFetch);
+        assert.strictEqual(res.deduction, 0);
+        assert.ok(res.findings.some(f => f.id === "securitytxt-missing"));
+    });
 });

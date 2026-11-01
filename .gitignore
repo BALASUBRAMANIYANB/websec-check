@@ -25,7 +25,9 @@ Thumbs.db
 # Packaged local archives
 *.tgz
 
-# Temporary testing directories
+# Temporary testing directories and local test scan exports
 tmp-install-test/
-
-
+*.sarif
+output_utf8.json
+report.md
+results.sarif

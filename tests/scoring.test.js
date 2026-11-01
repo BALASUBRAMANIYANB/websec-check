@@ -40,8 +40,17 @@ test("scoring.js: calculateScore with deductions", () => {
     assert.strictEqual(r1.score, 65);
     assert.strictEqual(r1.riskLevel, "MEDIUM");
 
+    // TLS deduction test (100 - 15 = 85 -> LOW)
+    const rTls = calculateScore({ headersScore: 100, tlsDeduction: 15 });
+    assert.strictEqual(rTls.score, 85);
+    assert.strictEqual(rTls.riskLevel, "LOW");
+
+    // TLS deduction cap test (cap at 15 points)
+    const rTlsCap = calculateScore({ headersScore: 100, tlsDeduction: 50 });
+    assert.strictEqual(rTlsCap.score, 85);
+
     // Underflow protection (score below 0 is clamped to 0)
-    const r2 = calculateScore({ headersScore: 10, cookieDeduction: 20, corsDeduction: 10 });
+    const r2 = calculateScore({ headersScore: 10, cookieDeduction: 20, corsDeduction: 10, tlsDeduction: 15 });
     assert.strictEqual(r2.score, 0);
     assert.strictEqual(r2.riskLevel, "HIGH");
 });

@@ -1,0 +1,53 @@
+name: 'WebSec Check'
+description: 'Zero-dependency passive web security, TLS certificate, and HTTP hardening audit for CI/CD'
+author: 'Balasubramaniyan B'
+inputs:
+  url:
+    description: 'Target website URL to scan (e.g. https://staging.example.com)'
+    required: true
+  fail-below:
+    description: 'Minimum security hardening score (0-100). Fails the workflow step if score is below this threshold.'
+    required: false
+    default: '0'
+  format:
+    description: 'Report output format: terminal, json, sarif, markdown'
+    required: false
+    default: 'markdown'
+  output:
+    description: 'File path to save the generated report (e.g. results.sarif, websec-report.md)'
+    required: false
+    default: ''
+  timeout:
+    description: 'Network connection timeout in seconds'
+    required: false
+    default: '10'
+  skip-tls:
+    description: 'Set to "true" to bypass TLS/SSL certificate verification'
+    required: false
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Run WebSec Check
+      shell: bash
+      run: |
+        ARGS="${{ inputs.url }} --format ${{ inputs.format }} --timeout ${{ inputs.timeout }}"
+        
+        if [ -n "${{ inputs.output }}" ]; then
+          ARGS="$ARGS -o ${{ inputs.output }}"
+        fi
+
+        if [ "${{ inputs.fail-below }}" != "0" ]; then
+          ARGS="$ARGS --fail-below ${{ inputs.fail-below }}"
+        fi
+
+        if [ "${{ inputs.skip-tls }}" = "true" ]; then
+          ARGS="$ARGS --skip-tls"
+        fi
+
+        node "${{ github.action_path }}/bin/websec-check.js" $ARGS
+
+branding:
+  icon: 'shield'
+  color: 'blue'
